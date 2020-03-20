@@ -1,0 +1,145 @@
+name: Deploy Maven Projects
+on: 
+  push:
+    tags:
+      - v*
+
+jobs:
+  test:
+    name: Test - Units & Integrations
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Setup JDK 11
+      uses: actions/setup-java@v1
+      with:
+        java-version: 11
+    - name: Maven Package
+      run: mvn -B clean package -DskipTests
+    - name: Maven Verify
+      run: mvn -B clean verify -Pintegration-test
+
+  sonar:
+    name: Test - SonarCloud Scan
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up JDK 11
+      uses: actions/setup-java@v1
+      with:
+        java-version: 11
+    - name: SonarCloud Scan
+      run: mvn -B clean verify -Psonar -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, sonar]   
+    name: Build Maven Project
+    steps:
+    - uses: actions/checkout@master
+    - name: Cache Maven archetype
+      uses: actions/cache@v1
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+    - name: Setup JDK 11
+      uses: actions/setup-java@v1
+      with:
+        java-version: 11
+    - name: Build & Test project 
+      run: mvn -f pom.xml clean install
+    - name: Upload Maven build artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: artifact
+        path: target/demo.jar      
+
+  publish:
+    name: Publish - GitHub Packages
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Docker
+      run: curl -sSL https://get.docker.com/ | sh
+    - name: Login to Github Registry
+      run: echo ${{ secrets.REGISTRY_TOKEN }} | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+    - name: Get the version
+      id: vars
+      run: | 
+        echo ::set-output name=tag::$(echo ${GITHUB_REF:10})
+        echo ${GITHUB_REF}
+    - name: Build the tagged image
+      run: docker build . --file Dockerfile --target=build -t docker.pkg.github.com/${{ github.repository }}/spring-test:${{steps.vars.outputs.tag}}
+    - name: Build the latest image
+      run: docker build . --file Dockerfile --target=build -t docker.pkg.github.com/${{ github.repository }}/spring-test:latest
+    - name: Publish artifact to Github Registry
+      run: |
+        BUILD_ID=docker.pkg.github.com/${{ github.repository }}/spring-test
+        docker push $BUILD_ID:${{steps.vars.outputs.tag}}
+        docker push $BUILD_ID:latest
+
+  heroku:
+    name: Deploy to Heroku from github registry
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+    - uses: actions/checkout@master
+    #- name: Download artifact
+    #  uses: actions/download-artifact@v1
+    #  with:
+    #    name: artifact
+    #- name: Install Heroku cli deploy
+    #  run: heroku plugins:install heroku-cli-deploy
+    #- name: deploy the jar to heroku
+    #  env: 
+    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+    #  run: |
+    #    heroku deploy:jar artifact/demo.jar --app ${{ secrets.HEROKU_APP }} -i Procfile 
+    #    heroku open
+
+
+    - name: Login to DockerHub Registry
+      run: echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USER }} --password-stdin
+    - name: push to heroku
+      env :
+        HEROKU_REGISTRY_URL: registry.heroku.com
+        HEROKU_TOKEN : ${{ secrets.HEROKU_API_KEY }}
+      run : |
+        echo $HEROKU_TOKEN | docker login --username=_ $HEROKU_REGISTRY_URL --password-stdin
+        export HEROKU_API_KEY=$HEROKU_TOKEN
+        heroku container:login
+        heroku logs --app ${{ secrets.HEROKU_APP }}
+        heroku container:push web --app ${{ secrets.HEROKU_APP }}
+        heroku container:release web --app ${{ secrets.HEROKU_APP }}
+        heroku ps:scale web=1 --app ${{ secrets.HEROKU_APP }}
+
+      # docker login --username=_ --password=$HEROKU_API_KEY $HEROKU_REGISTRY_URL   
+    
+    #- name: Login to Heroku Container registry
+    #  env: 
+    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+    #  run: heroku container:login
+    #- name: Build and push
+    #  env:
+    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+    #  run: heroku container:push -a ${{ secrets.HEROKU_APP_NAME }} web 
+    #- name: Release
+    #  env:
+    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+    #  run: |
+    #    heroku container:release -a ${{ secrets.HEROKU_APP_NAME }} web 
+    #    heroku ps:scale web=1 -a ${{ secrets.HEROKU_APP_NAME }}
+    #- name: Open in browser
+    #  run: heroku open
+    #- name: Pull docker image
+    #  run: docker pull docker.pkg.github.com/${{ secrets.HEROKU_APP_NAME }}/${{ github.repository }}/build:latest
+    #- name: Test build docker
+    #  run : |
+    #    docker build -t ${{ secrets.HEROKU_APP_NAME }}/build:latest
+    #    docker run -p 8080:8080 ${{ secrets.HEROKU_APP_NAME }}/build:latest
+    
