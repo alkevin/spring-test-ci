@@ -18,11 +18,11 @@ test spring ci
 * on root project run :
   
 ```bash
-docker build -t spring-test .
+docker build -t spring-test-ci .
 ```
 
 * then :
 
 ```bash
-docker run -p 8081:8080 --name <IMAGE_NAME> spring-test
+docker run -p 8081:8080 --name <IMAGE_NAME> spring-test-ci
 ```

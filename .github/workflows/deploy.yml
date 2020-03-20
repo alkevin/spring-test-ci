@@ -74,12 +74,12 @@ jobs:
         echo ::set-output name=tag::$(echo ${GITHUB_REF:10})
         echo ${GITHUB_REF}
     - name: Build the tagged image
-      run: docker build . --file Dockerfile --target=build -t docker.pkg.github.com/${{ github.repository }}/spring-test:${{steps.vars.outputs.tag}}
+      run: docker build . --file Dockerfile --target=build -t docker.pkg.github.com/${{ github.repository }}/spring-test-ci:${{steps.vars.outputs.tag}}
     - name: Build the latest image
-      run: docker build . --file Dockerfile --target=build -t docker.pkg.github.com/${{ github.repository }}/spring-test:latest
+      run: docker build . --file Dockerfile --target=build -t docker.pkg.github.com/${{ github.repository }}/spring-test-ci:latest
     - name: Publish artifact to Github Registry
       run: |
-        BUILD_ID=docker.pkg.github.com/${{ github.repository }}/spring-test
+        BUILD_ID=docker.pkg.github.com/${{ github.repository }}/spring-test-ci
         docker push $BUILD_ID:${{steps.vars.outputs.tag}}
         docker push $BUILD_ID:latest
 
@@ -89,20 +89,6 @@ jobs:
     needs: publish
     steps:
     - uses: actions/checkout@master
-    #- name: Download artifact
-    #  uses: actions/download-artifact@v1
-    #  with:
-    #    name: artifact
-    #- name: Install Heroku cli deploy
-    #  run: heroku plugins:install heroku-cli-deploy
-    #- name: deploy the jar to heroku
-    #  env: 
-    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-    #  run: |
-    #    heroku deploy:jar artifact/demo.jar --app ${{ secrets.HEROKU_APP }} -i Procfile 
-    #    heroku open
-
-
     - name: Login to DockerHub Registry
       run: echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USER }} --password-stdin
     - name: push to heroku
@@ -118,28 +104,4 @@ jobs:
         heroku container:release web --app ${{ secrets.HEROKU_APP }}
         heroku ps:scale web=1 --app ${{ secrets.HEROKU_APP }}
 
-      # docker login --username=_ --password=$HEROKU_API_KEY $HEROKU_REGISTRY_URL   
-    
-    #- name: Login to Heroku Container registry
-    #  env: 
-    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-    #  run: heroku container:login
-    #- name: Build and push
-    #  env:
-    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-    #  run: heroku container:push -a ${{ secrets.HEROKU_APP_NAME }} web 
-    #- name: Release
-    #  env:
-    #    HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-    #  run: |
-    #    heroku container:release -a ${{ secrets.HEROKU_APP_NAME }} web 
-    #    heroku ps:scale web=1 -a ${{ secrets.HEROKU_APP_NAME }}
-    #- name: Open in browser
-    #  run: heroku open
-    #- name: Pull docker image
-    #  run: docker pull docker.pkg.github.com/${{ secrets.HEROKU_APP_NAME }}/${{ github.repository }}/build:latest
-    #- name: Test build docker
-    #  run : |
-    #    docker build -t ${{ secrets.HEROKU_APP_NAME }}/build:latest
-    #    docker run -p 8080:8080 ${{ secrets.HEROKU_APP_NAME }}/build:latest
     
