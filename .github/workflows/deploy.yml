@@ -19,17 +19,6 @@ jobs:
     - name: Maven Verify
       run: mvn -B clean verify -Pintegration-test
 
-  sonar:
-    name: Test - SonarCloud Scan
-    runs-on: ubuntu-18.04
-    steps:
-    - uses: actions/checkout@master
-    - name: SonarCloud Scan
-      uses: sonarsource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
   build:
     runs-on: ubuntu-latest
     needs: [test, sonar]   
@@ -53,7 +42,24 @@ jobs:
       uses: actions/upload-artifact@v1
       with:
         name: artifact
-        path: target/demo.jar      
+        path: target/demo.jar     
+
+  sonar:
+    name: Test - SonarCloud Scan
+    runs-on: ubuntu-18.04
+    needs: build
+    steps:
+    - uses: actions/checkout@master
+    - name: Download Jar
+      uses: actions/download-artifact@v1
+      with:
+        name: artifact
+        path: target/demo.jar 
+    - name: SonarCloud Scan
+      uses: sonarsource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}  
 
   publish:
     name: Publish - GitHub Packages
