@@ -107,5 +107,3 @@ jobs:
         heroku container:push web --app ${{ secrets.HEROKU_APP }}
         heroku container:release web --app ${{ secrets.HEROKU_APP }}
         heroku ps:scale web=1 --app ${{ secrets.HEROKU_APP }}
-
-    
